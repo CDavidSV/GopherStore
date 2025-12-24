@@ -6,6 +6,8 @@ import (
 	"net"
 	"net/url"
 	"sync"
+
+	"github.com/CDavidSV/GopherStore/internal/resp"
 )
 
 type Message struct {
@@ -22,10 +24,11 @@ type Server struct {
 	deregCh chan *Client
 	clients map[*Client]struct{}
 	msgCh   chan Message
+	store   KVStore
 }
 
 // Creates a new server instance.
-func NewServer(logger *slog.Logger, hostName string) *Server {
+func NewServer(logger *slog.Logger, hostName string, store KVStore) *Server {
 	urlVal := fmt.Sprintf("tcp://%s", hostName)
 	parsedHost, err := url.Parse(urlVal)
 	if err != nil {
@@ -40,6 +43,7 @@ func NewServer(logger *slog.Logger, hostName string) *Server {
 		deregCh: make(chan *Client),
 		msgCh:   make(chan Message),
 		clients: make(map[*Client]struct{}),
+		store:   store,
 	}
 }
 
@@ -61,20 +65,46 @@ func (s *Server) Start() error {
 	return nil
 }
 
+// Adds a new connected client to the server's client map.
 func (s *Server) registerClient(client *Client) {
 	s.logger.Info("new client connected", "remoteAddr", client.conn.RemoteAddr().String())
 	s.clients[client] = struct{}{}
 }
 
+// Removes a client from the server's client map.
 func (s *Server) deregisterClient(client *Client) {
+	client.conn.Close()
 	s.logger.Info("client disconnected", "remoteAddr", client.conn.RemoteAddr().String())
 	delete(s.clients, client)
 }
 
+// Responds to a PING command from a client.
+func (s *Server) handlePingCommand(cmd PingCommand, client *Client) {
+	response := "PONG"
+	if cmd.Value != "" {
+		response = cmd.Value
+	}
+	if err := client.SendMessage(resp.EncodeSimpleString(response)); err != nil {
+		s.logger.Error("failed to send PING response", "error", err)
+	}
+}
+
+// Handles a SET command from a client.
+func (s *Server) handleSetCommand(cmd SetCommand, client *Client) {
+	s.store.Set(cmd.Key, []byte(cmd.Value))
+
+	// Reply with OK
+	if err := client.SendMessage(resp.EncodeSimpleString("OK")); err != nil {
+		s.logger.Error("failed to send SET response", "error", err)
+	}
+}
+
 func (s *Server) handleMessage(msg Message) {
 	switch cmd := msg.cmd.(type) {
+	case PingCommand:
+		s.handlePingCommand(cmd, msg.client)
 	case SetCommand:
-		s.logger.Info("handling SET command", "key", cmd.Key, "value", cmd.Value)
+		s.handleSetCommand(cmd, msg.client)
 	case GetCommand:
 		s.logger.Info("handling GET command", "key", cmd.Key)
 	}
@@ -114,10 +144,11 @@ func (s *Server) acceptLoop() {
 
 // Handles registering a new client to the server and starts its reader loop.
 func (s *Server) handleNewClient(conn net.Conn) {
-	client := NewClient(conn, s.deregCh, s.msgCh)
+	client := NewClient(conn, s.deregCh, s.msgCh, s.logger)
 	s.regCh <- client
 
-	if err := client.reader(); err != nil {
+	go client.write()
+	if err := client.read(); err != nil {
 		s.logger.Error("client read error", "error", err)
 	}
 }

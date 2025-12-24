@@ -12,8 +12,8 @@ const (
 	terminator byte = '\n'
 )
 
-func readAndParseCount(r *bufio.Reader) (int, error) {
-	// Read until the line terminator to get the count of elements in the array.
+func readAndParseLength(r *bufio.Reader) (int, error) {
+	// Read until the line terminator to get the length of elements in the array.
 	bytes, err := r.ReadBytes(terminator)
 	if err != nil {
 		return 0, err
@@ -23,14 +23,14 @@ func readAndParseCount(r *bufio.Reader) (int, error) {
 	countStr := strings.TrimSuffix(string(bytes), "\r\n")
 	count, err := strconv.Atoi(countStr)
 	if err != nil {
-		return 0, &RESPError{Msg: "failed to parse count", Err: err}
+		return 0, &RESPError{Msg: "invalid length", Err: err}
 	}
 	return count, nil
 }
 
 // Reads an array from the RESP protocol.
 func ReadArray(r *bufio.Reader) (RespArray, error) {
-	count, err := readAndParseCount(r)
+	count, err := readAndParseLength(r)
 	if err != nil {
 		return RespArray{}, err
 	}
@@ -53,13 +53,13 @@ func ReadArray(r *bufio.Reader) (RespArray, error) {
 
 // Reads a bulk string from the RESP protocol.
 func ReadBulkString(r *bufio.Reader) (RespBulkString, error) {
-	count, err := readAndParseCount(r)
+	count, err := readAndParseLength(r)
 	if err != nil {
 		return RespBulkString{}, err
 	}
 
 	if count == -1 {
-		return RespBulkString{Value: ""}, nil
+		return RespBulkString{Value: nil}, nil
 	}
 
 	bytes := make([]byte, count+2) // +2 for \r\n
@@ -73,7 +73,7 @@ func ReadBulkString(r *bufio.Reader) (RespBulkString, error) {
 		return RespBulkString{}, &RESPError{Msg: "bulk string not terminated properly"}
 	}
 
-	value := string(bytes[:count])
+	value := bytes[:count]
 	return RespBulkString{Value: value}, nil
 }
 

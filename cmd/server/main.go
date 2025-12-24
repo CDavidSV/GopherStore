@@ -9,8 +9,10 @@ import (
 )
 
 func main() {
-	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
-	server := server.NewServer(logger, ":5001")
+	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug}))
+
+	storage := server.NewInMemoryKVStore()
+	server := server.NewServer(logger, ":5001", storage)
 
 	// Start server
 	log.Fatal(server.Start())

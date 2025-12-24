@@ -17,11 +17,15 @@ const (
 type Command interface{}
 
 type SetCommand struct {
-	Key, Value string
+	Key, Value []byte
 }
 
 type GetCommand struct {
-	Key string
+	Key []byte
+}
+
+type PingCommand struct {
+	Value string
 }
 
 func validateSetCommand(arr resp.RespArray) (Command, error) {
@@ -60,6 +64,24 @@ func validateGetCommand(arr resp.RespArray) (Command, error) {
 	}, nil
 }
 
+func validatePingCommand(arr resp.RespArray) (Command, error) {
+	if len(arr.Elements) > 2 {
+		return nil, fmt.Errorf("PING command accepts at most 1 argument")
+	}
+
+	if len(arr.Elements) == 2 {
+		value, ok := arr.Elements[1].(resp.RespBulkString)
+		if !ok {
+			return nil, fmt.Errorf("invalid PING command format: expected bulk string for value")
+		}
+		return PingCommand{
+			Value: string(value.Value),
+		}, nil
+	}
+
+	return PingCommand{}, nil
+}
+
 func ParseCommand(cmdArray resp.RespArray) (Command, error) {
 	command := cmdArray.Elements[0]
 
@@ -73,6 +95,8 @@ func ParseCommand(cmdArray resp.RespArray) (Command, error) {
 		return validateSetCommand(cmdArray)
 	case CmdGet:
 		return validateGetCommand(cmdArray)
+	case CmdPing:
+		return validatePingCommand(cmdArray)
 	default:
 		return nil, fmt.Errorf("unknown command: %s", cmdStr.Value)
 	}

@@ -1,7 +1,5 @@
 package resp
 
-import "fmt"
-
 type RespType int
 
 const (
@@ -22,7 +20,7 @@ type RespArray struct {
 }
 
 type RespBulkString struct {
-	Value string
+	Value []byte
 }
 
 type RespSimpleString struct {
@@ -44,10 +42,7 @@ type RESPError struct {
 }
 
 func (e *RESPError) Error() string {
-	if e.Err != nil {
-		return fmt.Sprintf("invalid RESP format: %s: %v", e.Msg, e.Err)
-	}
-	return fmt.Sprintf("invalid RESP format: %s", e.Msg)
+	return e.Msg
 }
 
 func (e *RESPError) Unwrap() error {
