@@ -6,6 +6,7 @@ import (
 	"net"
 	"net/url"
 	"sync"
+	"time"
 
 	"github.com/CDavidSV/GopherStore/internal/resp"
 )
@@ -24,6 +25,7 @@ type Server struct {
 	deregCh chan *Client
 	clients map[*Client]struct{}
 	msgCh   chan Message
+	quitCh  chan struct{}
 	store   KVStore
 }
 
@@ -42,6 +44,7 @@ func NewServer(logger *slog.Logger, hostName string, store KVStore) *Server {
 		regCh:   make(chan *Client),
 		deregCh: make(chan *Client),
 		msgCh:   make(chan Message),
+		quitCh:  make(chan struct{}),
 		clients: make(map[*Client]struct{}),
 		store:   store,
 	}
@@ -85,18 +88,63 @@ func (s *Server) handlePingCommand(cmd PingCommand, client *Client) {
 		response = cmd.Value
 	}
 	if err := client.SendMessage(resp.EncodeSimpleString(response)); err != nil {
-		s.logger.Error("failed to send PING response", "error", err)
+		s.logger.Error("failed to send PING response", "error", err, "remoteAddr", client.conn.RemoteAddr().String())
 	}
 }
 
 // Handles a SET command from a client.
 func (s *Server) handleSetCommand(cmd SetCommand, client *Client) {
-	s.store.Set(cmd.Key, []byte(cmd.Value))
+	_, ok := s.store.Get(cmd.Key)
+	if cmd.condition == ConditionNX && ok {
+		// Key exists, do not set
+		client.SendMessage(resp.EncodeBulkString(nil))
+		return
+	}
+
+	if cmd.condition == ConditionXX && !ok {
+		// Key does not exist, do not set
+		client.SendMessage(resp.EncodeSimpleString("OK"))
+		return
+	}
+
+	var expiresAt int64 = -1
+	if cmd.expiration != nil {
+		expTime := time.Now().Add(*cmd.expiration)
+		expiresAt = expTime.UnixNano()
+	}
+
+	if expiresAt <= 0 {
+		// Set the key-value pair
+		s.store.Set(cmd.Key, cmd.Value, expiresAt)
+	}
 
 	// Reply with OK
 	if err := client.SendMessage(resp.EncodeSimpleString("OK")); err != nil {
-		s.logger.Error("failed to send SET response", "error", err)
+		s.logger.Error("failed to send SET response", "error", err, "remoteAddr", client.conn.RemoteAddr().String())
 	}
+}
+
+// Handles a GET command from a client.
+func (s *Server) handleGetCommand(cmd GetCommand, client *Client) {
+	value, exists := s.store.Get(cmd.Key)
+	if !exists {
+		// Reply with nil bulk string
+		if err := client.SendMessage(resp.EncodeBulkString(nil)); err != nil {
+			s.logger.Error("failed to send GET response", "error", err, "remoteAddr", client.conn.RemoteAddr().String())
+		}
+		return
+	}
+
+	// Send value as a bulk string to the client
+	if err := client.SendMessage(resp.EncodeBulkString(value)); err != nil {
+		s.logger.Error("failed to send GET response", "error", err, "remoteAddr", client.conn.RemoteAddr().String())
+	}
+}
+
+func (s *Server) handleDeleteCommand(cmd DeleteCommand, client *Client) {
+	deleted := s.store.Delete(cmd.Keys)
+
+	client.SendMessage(resp.EncodeInteger(deleted))
 }
 
 func (s *Server) handleMessage(msg Message) {
@@ -106,7 +154,9 @@ func (s *Server) handleMessage(msg Message) {
 	case SetCommand:
 		s.handleSetCommand(cmd, msg.client)
 	case GetCommand:
-		s.logger.Info("handling GET command", "key", cmd.Key)
+		s.handleGetCommand(cmd, msg.client)
+	case DeleteCommand:
+		s.handleDeleteCommand(cmd, msg.client)
 	}
 }
 
@@ -122,6 +172,13 @@ func (s *Server) serverLoop() {
 			s.deregisterClient(client)
 		case msg := <-s.msgCh:
 			s.handleMessage(msg)
+		case <-s.quitCh:
+			// Server is shutting down
+			s.store.Close()
+			for client := range s.clients {
+				s.deregisterClient(client)
+			}
+			return
 		}
 	}
 }
