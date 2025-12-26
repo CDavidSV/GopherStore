@@ -1,11 +1,15 @@
 package server
 
 import (
+	"errors"
 	"fmt"
 	"log/slog"
 	"net"
 	"net/url"
+	"os"
+	"os/signal"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/CDavidSV/GopherStore/internal/resp"
@@ -64,7 +68,16 @@ func (s *Server) Start() error {
 
 	s.logger.Info("server started", "host", s.host.String())
 
+	// Wait for interrupt signal to stop the server.
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
+	<-c
+
+	s.logger.Info("Shutting down server...")
+	close(s.quitCh)
 	s.wg.Wait()
+
+	s.logger.Info("Server stopped")
 	return nil
 }
 
@@ -113,7 +126,7 @@ func (s *Server) handleSetCommand(cmd SetCommand, client *Client) {
 		expiresAt = expTime.UnixNano()
 	}
 
-	if expiresAt <= 0 {
+	if expiresAt != 0 {
 		// Set the key-value pair
 		s.store.Set(cmd.Key, cmd.Value, expiresAt)
 	}
@@ -173,11 +186,12 @@ func (s *Server) serverLoop() {
 		case msg := <-s.msgCh:
 			s.handleMessage(msg)
 		case <-s.quitCh:
-			// Server is shutting down
+			// Shutdown the server
 			s.store.Close()
 			for client := range s.clients {
 				s.deregisterClient(client)
 			}
+			s.ln.Close()
 			return
 		}
 	}
@@ -190,6 +204,10 @@ func (s *Server) acceptLoop() {
 	for {
 		conn, err := s.ln.Accept()
 		if err != nil {
+			if errors.Is(err, net.ErrClosed) {
+				return // Listener closed, exit the loop
+			}
+
 			s.logger.Error("failed to accept connection", "error", err)
 			continue
 		}

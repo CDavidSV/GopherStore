@@ -1,7 +1,6 @@
 package main
 
 import (
-	"log"
 	"log/slog"
 	"os"
 
@@ -15,5 +14,8 @@ func main() {
 	server := server.NewServer(logger, ":5001", storage)
 
 	// Start server
-	log.Fatal(server.Start())
+	err := server.Start()
+	if err != nil {
+		logger.Error("Server failed to start", "error", err)
+	}
 }
