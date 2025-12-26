@@ -166,6 +166,18 @@ func (s *Server) handleExistsCommand(cmd ExistsCommand, client *Client) {
 	client.SendMessage(resp.EncodeInteger(existing))
 }
 
+func (s *Server) handleExpireCommand(cmd ExpireCommand, client *Client) {
+	expiresAt := time.Now().Add(cmd.TTL).UnixNano()
+	success := s.store.Expire(cmd.Key, expiresAt)
+
+	// Reply with integer 1 if successful, 0 otherwise.
+	if success {
+		client.SendMessage(resp.EncodeInteger(1))
+	} else {
+		client.SendMessage(resp.EncodeInteger(0))
+	}
+}
+
 func (s *Server) handleMessage(msg Message) {
 	switch cmd := msg.cmd.(type) {
 	case PingCommand:
@@ -178,6 +190,8 @@ func (s *Server) handleMessage(msg Message) {
 		s.handleDeleteCommand(cmd, msg.client)
 	case ExistsCommand:
 		s.handleExistsCommand(cmd, msg.client)
+	case ExpireCommand:
+		s.handleExpireCommand(cmd, msg.client)
 	}
 }
 

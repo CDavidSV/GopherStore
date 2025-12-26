@@ -7,11 +7,12 @@ import (
 
 // KVStore interface defines a key-value storage system.
 type KVStore interface {
-	Set(key, value []byte, expiresAt int64) // Sets a key-value pair with optional expiration time (-1 means no expiration).
-	Get(key []byte) ([]byte, bool)          // Retrieves the value for a given key.
-	Delete(keys [][]byte) int64             // Deletes a key-value pair. Returning the number of keys deleted.
-	Exists(keys [][]byte) int64             // Returns the number of keys currently stored.
-	Close()                                 // Closes the store and releases resources.
+	Set(key, value []byte, expiresAt int64)  // Sets a key-value pair with optional expiration time (-1 means no expiration).
+	Get(key []byte) ([]byte, bool)           // Retrieves the value for a given key.
+	Delete(keys [][]byte) int64              // Deletes a key-value pair. Returning the number of keys deleted.
+	Exists(keys [][]byte) int64              // Returns the number of keys currently stored.
+	Expire(key []byte, expiresAt int64) bool // Sets expiration for a key. Returns true if the key exists and expiration is set.
+	Close()                                  // Closes the store and releases resources.
 }
 
 type Box struct {
@@ -138,6 +139,34 @@ func (kv *InMemoryKVStore) Exists(keys [][]byte) int64 {
 	}
 
 	return existingKeys
+}
+
+func (kv *InMemoryKVStore) Expire(key []byte, expiresAt int64) bool {
+	kv.mu.Lock()
+	defer kv.mu.Unlock()
+
+	if kv.closed {
+		return false
+	}
+
+	value, exists := kv.store[string(key)]
+	if !exists {
+		return false
+	}
+
+	// Check if expired already
+	if value.expiresAt > 0 && time.Now().UnixNano() > value.expiresAt {
+		// Key has expired
+		delete(kv.store, string(key))
+		delete(kv.expirable, string(key))
+		return false
+	}
+
+	// Update expiration time
+	value.expiresAt = expiresAt
+	kv.store[string(key)] = value
+
+	return true
 }
 
 func (kv *InMemoryKVStore) Close() {

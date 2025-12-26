@@ -13,11 +13,13 @@ type SetCondition int
 
 const (
 	// Commands
-	CmdPing   CommandName = "PING"
-	CmdSet    CommandName = "SET"
-	CmdGet    CommandName = "GET"
-	CmdExists CommandName = "EXISTS"
-	CmdDelete CommandName = "DEL"
+	CmdPing    CommandName = "PING"
+	CmdSet     CommandName = "SET"
+	CmdGet     CommandName = "GET"
+	CmdExists  CommandName = "EXISTS"
+	CmdDelete  CommandName = "DEL"
+	CmdExpire  CommandName = "EXPIRE"
+	CmdPExpire CommandName = "PEXPIRE"
 
 	// SET command conditions
 	ConditionNone SetCondition = iota
@@ -47,6 +49,11 @@ type GetCommand struct {
 
 type PingCommand struct {
 	Value string
+}
+
+type ExpireCommand struct {
+	Key []byte
+	TTL time.Duration
 }
 
 func parseSetCommand(arr resp.RespArray) (Command, error) {
@@ -186,6 +193,39 @@ func parseExistsCommand(arr resp.RespArray) (Command, error) {
 	}, nil
 }
 
+func parseExpireCommand(arr resp.RespArray) (Command, error) {
+	if len(arr.Elements) != 3 {
+		return nil, fmt.Errorf("EXPIRE/PEXPIRE command requires exactly 2 arguments")
+	}
+
+	key, ok := arr.Elements[1].(resp.RespBulkString)
+	if !ok {
+		return nil, fmt.Errorf("invalid EXPIRE/PEXPIRE command format: expected bulk string for key")
+	}
+
+	ttl, ok := arr.Elements[2].(resp.RespBulkString)
+	if !ok {
+		return nil, fmt.Errorf("invalid EXPIRE/PEXPIRE command format: expected bulk string for TTL")
+	}
+
+	ttlInt, err := util.ParsePositiveInt(ttl.Value)
+	if !err {
+		return nil, fmt.Errorf("invalid TTL value")
+	}
+
+	var duration time.Duration
+	if string(arr.Elements[0].(resp.RespBulkString).Value) == "EXPIRE" {
+		duration = time.Duration(ttlInt) * time.Second
+	} else {
+		duration = time.Duration(ttlInt) * time.Millisecond
+	}
+
+	return ExpireCommand{
+		Key: key.Value,
+		TTL: duration,
+	}, nil
+}
+
 func ParseCommand(cmdArray resp.RespArray) (Command, error) {
 	command := cmdArray.Elements[0]
 
@@ -205,8 +245,9 @@ func ParseCommand(cmdArray resp.RespArray) (Command, error) {
 		return parseExistsCommand(cmdArray)
 	case CmdPing:
 		return parsePingCommand(cmdArray)
+	case CmdExpire, CmdPExpire:
+		return parseExpireCommand(cmdArray)
 	default:
 		return nil, fmt.Errorf("unknown command: %s", cmdStr.Value)
 	}
-
 }

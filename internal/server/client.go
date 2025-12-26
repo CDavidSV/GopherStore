@@ -58,7 +58,7 @@ func (c *Client) read() error {
 				return nil
 			} else if respErr, ok := err.(*resp.RESPError); ok {
 				c.logger.Debug("RESP error while reading from client", "error", respErr.Msg)
-				c.SendMessage(resp.EncodeError(fmt.Sprintf("Protocol Error: %s", respErr.Error())))
+				c.SendMessage(resp.EncodeError(respErr.Error()))
 				return nil
 			}
 
@@ -71,13 +71,13 @@ func (c *Client) read() error {
 		cmd, ok := v.(resp.RespArray)
 		if !ok {
 			c.logger.Debug("received non-array from client")
-			c.SendMessage(resp.EncodeError("Protocol Error: expected array of commands"))
+			c.SendMessage(resp.EncodeError("expected array of commands"))
 			return nil
 		}
 
 		if len(cmd.Elements) == 0 {
 			c.logger.Debug("received empty command array from client")
-			c.SendMessage(resp.EncodeError("Protocol Error: empty command array"))
+			c.SendMessage(resp.EncodeError("empty command array"))
 			return nil
 		}
 
@@ -85,7 +85,7 @@ func (c *Client) read() error {
 		parsedCmd, err := ParseCommand(cmd)
 		if err != nil {
 			c.logger.Debug("failed to parse command from client", "error", err)
-			c.SendMessage(resp.EncodeError(fmt.Sprintf("Protocol Error: %s", err.Error())))
+			c.SendMessage(resp.EncodeError(err.Error()))
 			continue
 		}
 
