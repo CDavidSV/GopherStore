@@ -43,9 +43,8 @@ func (c *Client) SendMessage(msg []byte) error {
 
 func (c *Client) read() error {
 	defer func() {
-		// Close the send channel to signal write()
+		// Close the send channel to signal write() to stop
 		close(c.doneCh)
-		c.deregCh <- c
 	}()
 
 	reader := bufio.NewReader(c.conn)
@@ -99,6 +98,7 @@ func (c *Client) read() error {
 func (c *Client) write() {
 	defer func() {
 		c.writer.Flush()
+		c.deregCh <- c
 	}()
 
 	for {
