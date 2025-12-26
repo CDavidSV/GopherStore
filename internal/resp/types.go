@@ -27,7 +27,7 @@ type RespSimpleString struct {
 	Value string
 }
 
-type RespError struct {
+type RespErrorValue struct {
 	Message string
 }
 

@@ -3,6 +3,7 @@ package resp
 import (
 	"bufio"
 	"fmt"
+	"io"
 	"strconv"
 	"strings"
 )
@@ -11,6 +12,11 @@ const (
 	// Constants for RESP parsing.
 	terminator byte = '\n'
 )
+
+// Checks if bytes at the given offset end with \r\n.
+func hasValidTerminator(bytes []byte, offset int) bool {
+	return len(bytes) > offset+1 && bytes[offset] == '\r' && bytes[offset+1] == '\n'
+}
 
 func readAndParseLength(r *bufio.Reader) (int, error) {
 	// Read until the line terminator to get the length of elements in the array.
@@ -63,18 +69,68 @@ func ReadBulkString(r *bufio.Reader) (RespBulkString, error) {
 	}
 
 	bytes := make([]byte, count+2) // +2 for \r\n
-	_, err = r.Read(bytes)
+	_, err = io.ReadFull(r, bytes)
 	if err != nil {
 		return RespBulkString{}, err
 	}
 
 	// Ensure that it ends with \r\n
-	if bytes[count] != '\r' || bytes[count+1] != '\n' {
+	if !hasValidTerminator(bytes, count) {
 		return RespBulkString{}, &RESPError{Msg: "bulk string not terminated properly"}
 	}
 
 	value := bytes[:count]
 	return RespBulkString{Value: value}, nil
+}
+
+func ReadSimpleString(r *bufio.Reader) (RespSimpleString, error) {
+	line, err := r.ReadString(terminator)
+	if err != nil {
+		return RespSimpleString{}, err
+	}
+
+	if !hasValidTerminator([]byte(line), len(line)-2) {
+		return RespSimpleString{}, &RESPError{Msg: "simple string not terminated properly"}
+	}
+
+	// Trim the trailing \r\n
+	value := strings.TrimSuffix(line, "\r\n")
+	return RespSimpleString{Value: value}, nil
+}
+
+func ReadError(r *bufio.Reader) (RespErrorValue, error) {
+	line, err := r.ReadString(terminator)
+	if err != nil {
+		return RespErrorValue{}, err
+	}
+
+	if !hasValidTerminator([]byte(line), len(line)-2) {
+		return RespErrorValue{}, &RESPError{Msg: "error not terminated properly"}
+	}
+
+	// Trim the trailing \r\n
+	value := strings.TrimSuffix(line, "\r\n")
+	return RespErrorValue{Message: value}, nil
+}
+
+func ReadInteger(r *bufio.Reader) (RespInteger, error) {
+	line, err := r.ReadString(terminator)
+	if err != nil {
+		return RespInteger{}, err
+	}
+
+	if !hasValidTerminator([]byte(line), len(line)-2) {
+		return RespInteger{}, &RESPError{Msg: "integer not terminated properly"}
+	}
+
+	// Trim the trailing \r\n
+	valueStr := strings.TrimSuffix(line, "\r\n")
+	value, err := strconv.ParseInt(valueStr, 10, 64)
+	if err != nil {
+		return RespInteger{}, &RESPError{Msg: "invalid integer", Err: err}
+	}
+
+	return RespInteger{Value: value}, nil
 }
 
 // Reads a RESP value from the reader.
@@ -89,6 +145,12 @@ func ReadRESP(r *bufio.Reader) (RespValue, error) {
 		return ReadArray(r)
 	case '$':
 		return ReadBulkString(r)
+	case '+':
+		return ReadSimpleString(r)
+	case '-':
+		return ReadError(r)
+	case ':':
+		return ReadInteger(r)
 	default:
 		return nil, &RESPError{Msg: fmt.Sprintf("unknown RESP type prefix: %c", prefix)}
 	}
