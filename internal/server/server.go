@@ -178,6 +178,32 @@ func (s *Server) handleExpireCommand(cmd ExpireCommand, client *Client) {
 	}
 }
 
+func (s *Server) handlePushCommand(cmd PushCommand, client *Client) {
+	newLen, err := s.store.Push(cmd.Key, cmd.Vals, cmd.pushAtFront)
+	if err != nil {
+		s.logger.Error("failed to handle PUSH command", "error", err, "remoteAddr", client.conn.RemoteAddr().String())
+		client.SendMessage(resp.EncodeError(err.Error()))
+		return
+	}
+
+	client.SendMessage(resp.EncodeInteger(int64(newLen)))
+}
+
+func (s *Server) handlePopCommand(cmd PopCommand, client *Client) {
+	value, err := s.store.Pop(cmd.Key, cmd.popAtFront)
+	if err != nil {
+		s.logger.Error("failed to handle POP command", "error", err, "remoteAddr", client.conn.RemoteAddr().String())
+		client.SendMessage(resp.EncodeError(err.Error()))
+		return
+	}
+
+	if value == nil {
+		client.SendMessage(resp.EncodeBulkString(nil))
+	} else {
+		client.SendMessage(resp.EncodeBulkString(value))
+	}
+}
+
 func (s *Server) handleMessage(msg Message) {
 	switch cmd := msg.cmd.(type) {
 	case PingCommand:
@@ -192,6 +218,10 @@ func (s *Server) handleMessage(msg Message) {
 		s.handleExistsCommand(cmd, msg.client)
 	case ExpireCommand:
 		s.handleExpireCommand(cmd, msg.client)
+	case PushCommand:
+		s.handlePushCommand(cmd, msg.client)
+	case PopCommand:
+		s.handlePopCommand(cmd, msg.client)
 	}
 }
 

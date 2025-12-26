@@ -16,6 +16,10 @@ const (
 	CmdPing    CommandName = "PING"
 	CmdSet     CommandName = "SET"
 	CmdGet     CommandName = "GET"
+	CmdLPush   CommandName = "LPUSH"
+	CmdRPush   CommandName = "RPUSH"
+	CmdLPop    CommandName = "LPOP"
+	CmdRPop    CommandName = "RPOP"
 	CmdExists  CommandName = "EXISTS"
 	CmdDelete  CommandName = "DEL"
 	CmdExpire  CommandName = "EXPIRE"
@@ -54,6 +58,17 @@ type PingCommand struct {
 type ExpireCommand struct {
 	Key []byte
 	TTL time.Duration
+}
+
+type PushCommand struct {
+	Key         []byte
+	Vals        [][]byte
+	pushAtFront bool
+}
+
+type PopCommand struct {
+	Key        []byte
+	popAtFront bool
 }
 
 func parseSetCommand(arr resp.RespArray) (Command, error) {
@@ -226,6 +241,61 @@ func parseExpireCommand(arr resp.RespArray) (Command, error) {
 	}, nil
 }
 
+func parsePushCommand(arr resp.RespArray) (Command, error) {
+	if len(arr.Elements) < 3 {
+		return nil, fmt.Errorf("LPUSH/RPUSH command requires at least 2 arguments")
+	}
+
+	key, ok := arr.Elements[1].(resp.RespBulkString)
+	if !ok {
+		return nil, fmt.Errorf("invalid LPUSH/RPUSH command format: expected bulk string for key")
+	}
+
+	values := make([][]byte, len(arr.Elements)-2)
+	for i, elem := range arr.Elements[2:] {
+		val, ok := elem.(resp.RespBulkString)
+		if !ok {
+			return nil, fmt.Errorf("invalid LPUSH/RPUSH command format: expected bulk strings for values")
+		}
+		values[i] = val.Value
+	}
+
+	cmd := PushCommand{
+		Key:  key.Value,
+		Vals: values,
+	}
+
+	if string(arr.Elements[0].(resp.RespBulkString).Value) == "LPUSH" {
+		cmd.pushAtFront = true
+	} else {
+		cmd.pushAtFront = false
+	}
+	return cmd, nil
+}
+
+func parsePopCommand(arr resp.RespArray) (Command, error) {
+	if len(arr.Elements) != 2 {
+		return nil, fmt.Errorf("LPOP/RPOP command requires exactly 1 argument")
+	}
+
+	key, ok := arr.Elements[1].(resp.RespBulkString)
+	if !ok {
+		return nil, fmt.Errorf("invalid LPOP/RPOP command format: expected bulk string for key")
+	}
+
+	cmd := PopCommand{
+		Key: key.Value,
+	}
+
+	if string(arr.Elements[0].(resp.RespBulkString).Value) == "LPOP" {
+		cmd.popAtFront = true
+	} else {
+		cmd.popAtFront = false
+	}
+
+	return cmd, nil
+}
+
 func ParseCommand(cmdArray resp.RespArray) (Command, error) {
 	command := cmdArray.Elements[0]
 
@@ -247,6 +317,10 @@ func ParseCommand(cmdArray resp.RespArray) (Command, error) {
 		return parsePingCommand(cmdArray)
 	case CmdExpire, CmdPExpire:
 		return parseExpireCommand(cmdArray)
+	case CmdLPush, CmdRPush:
+		return parsePushCommand(cmdArray)
+	case CmdLPop, CmdRPop:
+		return parsePopCommand(cmdArray)
 	default:
 		return nil, fmt.Errorf("unknown command: %s", cmdStr.Value)
 	}

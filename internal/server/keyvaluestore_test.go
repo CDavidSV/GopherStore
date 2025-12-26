@@ -586,3 +586,427 @@ func BenchmarkConcurrentReadWrite(b *testing.B) {
 		}
 	})
 }
+
+func TestPushFront(t *testing.T) {
+	store := NewInMemoryKVStore()
+	defer store.Close()
+
+	key := []byte("list_key")
+	values := [][]byte{[]byte("value1"), []byte("value2"), []byte("value3")}
+
+	// Push values to the front
+	length, err := store.Push(key, values, true)
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+	if length != 3 {
+		t.Errorf("Expected length 3, got %d", length)
+	}
+
+	// Pop from front and verify order
+	val, err := store.Pop(key, true)
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+	if string(val) != "value3" {
+		t.Errorf("Expected value3, got %s", string(val))
+	}
+
+	val, err = store.Pop(key, true)
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+	if string(val) != "value2" {
+		t.Errorf("Expected value2, got %s", string(val))
+	}
+
+	val, err = store.Pop(key, true)
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+	if string(val) != "value1" {
+		t.Errorf("Expected value1, got %s", string(val))
+	}
+}
+
+func TestPushBack(t *testing.T) {
+	store := NewInMemoryKVStore()
+	defer store.Close()
+
+	key := []byte("list_key")
+	values := [][]byte{[]byte("value1"), []byte("value2"), []byte("value3")}
+
+	// Push values to the back
+	length, err := store.Push(key, values, false)
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+	if length != 3 {
+		t.Errorf("Expected length 3, got %d", length)
+	}
+
+	// Pop from back and verify order
+	val, err := store.Pop(key, false)
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+	if string(val) != "value3" {
+		t.Errorf("Expected value3, got %s", string(val))
+	}
+
+	val, err = store.Pop(key, false)
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+	if string(val) != "value2" {
+		t.Errorf("Expected value2, got %s", string(val))
+	}
+
+	val, err = store.Pop(key, false)
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+	if string(val) != "value1" {
+		t.Errorf("Expected value1, got %s", string(val))
+	}
+}
+
+func TestPopFromFront(t *testing.T) {
+	store := NewInMemoryKVStore()
+	defer store.Close()
+
+	key := []byte("list_key")
+	values := [][]byte{[]byte("value1"), []byte("value2"), []byte("value3")}
+
+	store.Push(key, values, false)
+
+	// Pop from front
+	val, err := store.Pop(key, true)
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+	if string(val) != "value1" {
+		t.Errorf("Expected value1, got %s", string(val))
+	}
+
+	val, err = store.Pop(key, true)
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+	if string(val) != "value2" {
+		t.Errorf("Expected value2, got %s", string(val))
+	}
+}
+
+func TestPopFromBack(t *testing.T) {
+	store := NewInMemoryKVStore()
+	defer store.Close()
+
+	key := []byte("list_key")
+	values := [][]byte{[]byte("value1"), []byte("value2"), []byte("value3")}
+
+	store.Push(key, values, true)
+
+	// Pop from back
+	val, err := store.Pop(key, false)
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+	if string(val) != "value1" {
+		t.Errorf("Expected value1, got %s", string(val))
+	}
+
+	val, err = store.Pop(key, false)
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+	if string(val) != "value2" {
+		t.Errorf("Expected value2, got %s", string(val))
+	}
+}
+
+func TestPopEmptyList(t *testing.T) {
+	store := NewInMemoryKVStore()
+	defer store.Close()
+
+	key := []byte("empty_list")
+
+	// Pop from non-existent list
+	val, err := store.Pop(key, true)
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+	if val != nil {
+		t.Errorf("Expected nil for empty list, got %v", val)
+	}
+
+	// Create a list and empty it
+	store.Push(key, [][]byte{[]byte("value")}, false)
+	store.Pop(key, false)
+
+	// Pop from now-empty list
+	val, err = store.Pop(key, false)
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+	if val != nil {
+		t.Errorf("Expected nil for empty list, got %v", val)
+	}
+}
+
+func TestPushToExistingList(t *testing.T) {
+	store := NewInMemoryKVStore()
+	defer store.Close()
+
+	key := []byte("list_key")
+
+	// Push initial values
+	length, err := store.Push(key, [][]byte{[]byte("value1"), []byte("value2")}, false)
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+	if length != 2 {
+		t.Errorf("Expected length 2, got %d", length)
+	}
+
+	// Push more values to the front
+	length, err = store.Push(key, [][]byte{[]byte("value3"), []byte("value4")}, true)
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+	if length != 4 {
+		t.Errorf("Expected length 4, got %d", length)
+	}
+
+	// Verify order: value4, value3, value1, value2
+	val, _ := store.Pop(key, true)
+	if string(val) != "value4" {
+		t.Errorf("Expected value4, got %s", string(val))
+	}
+
+	val, _ = store.Pop(key, true)
+	if string(val) != "value3" {
+		t.Errorf("Expected value3, got %s", string(val))
+	}
+
+	val, _ = store.Pop(key, true)
+	if string(val) != "value1" {
+		t.Errorf("Expected value1, got %s", string(val))
+	}
+
+	val, _ = store.Pop(key, true)
+	if string(val) != "value2" {
+		t.Errorf("Expected value2, got %s", string(val))
+	}
+}
+
+func TestPushPopWrongType(t *testing.T) {
+	store := NewInMemoryKVStore()
+	defer store.Close()
+
+	key := []byte("string_key")
+
+	// Set a regular string value
+	store.Set(key, []byte("simple_value"), -1)
+
+	// Try to push to a non-list key
+	_, err := store.Push(key, [][]byte{[]byte("value")}, false)
+	if err == nil {
+		t.Error("Expected error when pushing to non-list key")
+	}
+	if err.Error() != "WRONGTYPE Operation against a key holding the wrong kind of value" {
+		t.Errorf("Expected WRONGTYPE error, got %v", err)
+	}
+
+	// Try to pop from a non-list key
+	_, err = store.Pop(key, true)
+	if err == nil {
+		t.Error("Expected error when popping from non-list key")
+	}
+	if err.Error() != "WRONGTYPE Operation against a key holding the wrong kind of value" {
+		t.Errorf("Expected WRONGTYPE error, got %v", err)
+	}
+}
+
+func TestPushPopWithExpiration(t *testing.T) {
+	store := NewInMemoryKVStore()
+	defer store.Close()
+
+	key := []byte("expiring_list")
+	values := [][]byte{[]byte("value1"), []byte("value2")}
+
+	// Push values (lists are created with -1 expiration by default)
+	store.Push(key, values, false)
+
+	// Set expiration using Expire
+	expiresAt := time.Now().Add(100 * time.Millisecond).UnixNano()
+	success := store.Expire(key, expiresAt)
+	if !success {
+		t.Error("Expected Expire to succeed")
+	}
+
+	// Should be able to pop before expiration
+	val, err := store.Pop(key, true)
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+	if string(val) != "value1" {
+		t.Errorf("Expected value1, got %s", string(val))
+	}
+
+	// Wait for expiration
+	time.Sleep(150 * time.Millisecond)
+
+	// Should return nil after expiration
+	val, err = store.Pop(key, true)
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+	if val != nil {
+		t.Errorf("Expected nil after expiration, got %v", val)
+	}
+}
+
+func TestPushAfterExpiration(t *testing.T) {
+	store := NewInMemoryKVStore()
+	defer store.Close()
+
+	key := []byte("list_key")
+	values := [][]byte{[]byte("value1")}
+
+	// Push and expire
+	store.Push(key, values, false)
+	expiresAt := time.Now().Add(50 * time.Millisecond).UnixNano()
+	store.Expire(key, expiresAt)
+
+	// Wait for expiration
+	time.Sleep(100 * time.Millisecond)
+
+	// Push new values after expiration - should create a new list
+	length, err := store.Push(key, [][]byte{[]byte("value2")}, false)
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+	if length != 1 {
+		t.Errorf("Expected length 1 for new list, got %d", length)
+	}
+
+	val, _ := store.Pop(key, true)
+	if string(val) != "value2" {
+		t.Errorf("Expected value2, got %s", string(val))
+	}
+}
+
+func TestPushAfterClose(t *testing.T) {
+	store := NewInMemoryKVStore()
+
+	key := []byte("list_key")
+	values := [][]byte{[]byte("value1")}
+
+	store.Close()
+
+	// Push after close should return error
+	length, err := store.Push(key, values, false)
+	if err == nil {
+		t.Error("Expected error when pushing after close")
+	}
+	if length != 0 {
+		t.Errorf("Expected length 0 after close, got %d", length)
+	}
+}
+
+func TestPopAfterClose(t *testing.T) {
+	store := NewInMemoryKVStore()
+
+	key := []byte("list_key")
+	store.Push(key, [][]byte{[]byte("value1")}, false)
+
+	store.Close()
+
+	// Pop after close should return error
+	val, err := store.Pop(key, true)
+	if err == nil {
+		t.Error("Expected error when popping after close")
+	}
+	if val != nil {
+		t.Errorf("Expected nil after close, got %v", val)
+	}
+}
+
+func TestConcurrentPushPop(t *testing.T) {
+	store := NewInMemoryKVStore()
+	defer store.Close()
+
+	key := []byte("concurrent_list")
+	var wg sync.WaitGroup
+	numGoroutines := 50
+	numOperations := 100
+
+	// Concurrent pushes
+	wg.Add(numGoroutines)
+	for i := range numGoroutines {
+		go func(id int) {
+			defer wg.Done()
+			for j := 0; j < numOperations; j++ {
+				value := []byte{byte(id), byte(j)}
+				store.Push(key, [][]byte{value}, false)
+			}
+		}(i)
+	}
+
+	// Concurrent pops
+	wg.Add(numGoroutines / 2)
+	for i := 0; i < numGoroutines/2; i++ {
+		go func() {
+			defer wg.Done()
+			for j := 0; j < numOperations; j++ {
+				store.Pop(key, true)
+			}
+		}()
+	}
+
+	wg.Wait()
+	// Test passes if no race conditions or panics occur
+}
+
+func TestPushMultipleValues(t *testing.T) {
+	store := NewInMemoryKVStore()
+	defer store.Close()
+
+	key := []byte("list_key")
+	values := [][]byte{
+		[]byte("value1"),
+		[]byte("value2"),
+		[]byte("value3"),
+		[]byte("value4"),
+		[]byte("value5"),
+	}
+
+	length, err := store.Push(key, values, false)
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+	if length != 5 {
+		t.Errorf("Expected length 5, got %d", length)
+	}
+
+	// Verify all values can be popped
+	for i := range 5 {
+		val, err := store.Pop(key, true)
+		if err != nil {
+			t.Fatalf("Unexpected error on pop %d: %v", i, err)
+		}
+		if val == nil {
+			t.Errorf("Expected value at index %d, got nil", i)
+		}
+	}
+
+	// List should be empty now
+	val, err := store.Pop(key, true)
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+	if val != nil {
+		t.Errorf("Expected nil for empty list, got %v", val)
+	}
+}
