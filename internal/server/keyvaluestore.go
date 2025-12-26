@@ -10,6 +10,7 @@ type KVStore interface {
 	Set(key, value []byte, expiresAt int64) // Sets a key-value pair with optional expiration time (-1 means no expiration).
 	Get(key []byte) ([]byte, bool)          // Retrieves the value for a given key.
 	Delete(keys [][]byte) int64             // Deletes a key-value pair. Returning the number of keys deleted.
+	Exists(keys [][]byte) int64             // Returns the number of keys currently stored.
 	Close()                                 // Closes the store and releases resources.
 }
 
@@ -112,6 +113,31 @@ func (kv *InMemoryKVStore) Delete(keys [][]byte) int64 {
 	}
 
 	return deletedKeys
+}
+
+func (kv *InMemoryKVStore) Exists(keys [][]byte) int64 {
+	kv.mu.RLock()
+	defer kv.mu.RUnlock()
+
+	if kv.closed {
+		return 0
+	}
+
+	var existingKeys int64 = 0
+	for _, key := range keys {
+		_, exists := kv.store[string(key)]
+		if exists {
+			// Check expiration
+			value := kv.store[string(key)]
+			if value.expiresAt > 0 && time.Now().UnixNano() > value.expiresAt {
+				// Key has expired, skip counting
+				continue
+			}
+			existingKeys++
+		}
+	}
+
+	return existingKeys
 }
 
 func (kv *InMemoryKVStore) Close() {

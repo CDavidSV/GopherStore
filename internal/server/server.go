@@ -160,6 +160,12 @@ func (s *Server) handleDeleteCommand(cmd DeleteCommand, client *Client) {
 	client.SendMessage(resp.EncodeInteger(deleted))
 }
 
+func (s *Server) handleExistsCommand(cmd ExistsCommand, client *Client) {
+	existing := s.store.Exists(cmd.Keys)
+
+	client.SendMessage(resp.EncodeInteger(existing))
+}
+
 func (s *Server) handleMessage(msg Message) {
 	switch cmd := msg.cmd.(type) {
 	case PingCommand:
@@ -170,6 +176,8 @@ func (s *Server) handleMessage(msg Message) {
 		s.handleGetCommand(cmd, msg.client)
 	case DeleteCommand:
 		s.handleDeleteCommand(cmd, msg.client)
+	case ExistsCommand:
+		s.handleExistsCommand(cmd, msg.client)
 	}
 }
 

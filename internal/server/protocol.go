@@ -37,6 +37,10 @@ type DeleteCommand struct {
 	Keys [][]byte
 }
 
+type ExistsCommand struct {
+	Keys [][]byte
+}
+
 type GetCommand struct {
 	Key []byte
 }
@@ -163,6 +167,25 @@ func parseDeleteCommand(arr resp.RespArray) (Command, error) {
 	}, nil
 }
 
+func parseExistsCommand(arr resp.RespArray) (Command, error) {
+	if len(arr.Elements) < 2 {
+		return nil, fmt.Errorf("EXISTS command requires at least 1 argument")
+	}
+
+	keys := make([][]byte, len(arr.Elements)-1)
+	for i, elem := range arr.Elements[1:] {
+		key, ok := elem.(resp.RespBulkString)
+		if !ok {
+			return nil, fmt.Errorf("expected bulk strings for keys")
+		}
+		keys[i] = key.Value
+	}
+
+	return ExistsCommand{
+		Keys: keys,
+	}, nil
+}
+
 func ParseCommand(cmdArray resp.RespArray) (Command, error) {
 	command := cmdArray.Elements[0]
 
@@ -178,6 +201,8 @@ func ParseCommand(cmdArray resp.RespArray) (Command, error) {
 		return parseGetCommand(cmdArray)
 	case CmdDelete:
 		return parseDeleteCommand(cmdArray)
+	case CmdExists:
+		return parseExistsCommand(cmdArray)
 	case CmdPing:
 		return parsePingCommand(cmdArray)
 	default:
