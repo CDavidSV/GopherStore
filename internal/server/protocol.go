@@ -20,6 +20,8 @@ const (
 	CmdRPush   CommandName = "RPUSH"
 	CmdLPop    CommandName = "LPOP"
 	CmdRPop    CommandName = "RPOP"
+	CmdLLen    CommandName = "LLEN"
+	CmdLRange  CommandName = "LRANGE"
 	CmdExists  CommandName = "EXISTS"
 	CmdDelete  CommandName = "DEL"
 	CmdExpire  CommandName = "EXPIRE"
@@ -69,6 +71,16 @@ type PushCommand struct {
 type PopCommand struct {
 	Key        []byte
 	popAtFront bool
+}
+
+type LLenCommand struct {
+	Key []byte
+}
+
+type LRangeCommand struct {
+	Key   []byte
+	Start int
+	End   int
 }
 
 func parseSetCommand(arr resp.RespArray) (Command, error) {
@@ -296,6 +308,53 @@ func parsePopCommand(arr resp.RespArray) (Command, error) {
 	return cmd, nil
 }
 
+func parseLLenCommand(arr resp.RespArray) (Command, error) {
+	if len(arr.Elements) != 2 {
+		return nil, fmt.Errorf("LLEN command requires exactly 1 argument")
+	}
+
+	key, ok := arr.Elements[1].(resp.RespBulkString)
+	if !ok {
+		return nil, fmt.Errorf("invalid LLEN command format: expected bulk string for key")
+	}
+
+	return LLenCommand{
+		Key: key.Value,
+	}, nil
+}
+
+func parseLRangeCommand(arr resp.RespArray) (Command, error) {
+	if len(arr.Elements) != 4 {
+		return nil, fmt.Errorf("LRANGE command requires exactly 3 arguments")
+	}
+
+	args := make([]resp.RespBulkString, 3)
+	for i, arg := range arr.Elements[1:] {
+		val, ok := arg.(resp.RespBulkString)
+		if !ok {
+			return nil, fmt.Errorf("invalid LRANGE command format: expected bulk strings for arguments")
+		}
+
+		args[i] = val
+	}
+
+	start, err := util.ParseInt(args[1].Value)
+	if !err {
+		return nil, fmt.Errorf("invalid start index for LRANGE command")
+	}
+
+	end, err := util.ParseInt(args[2].Value)
+	if !err {
+		return nil, fmt.Errorf("invalid end index for LRANGE command")
+	}
+
+	return LRangeCommand{
+		Key:   args[0].Value,
+		Start: start,
+		End:   end,
+	}, nil
+}
+
 func ParseCommand(cmdArray resp.RespArray) (Command, error) {
 	command := cmdArray.Elements[0]
 
@@ -321,6 +380,10 @@ func ParseCommand(cmdArray resp.RespArray) (Command, error) {
 		return parsePushCommand(cmdArray)
 	case CmdLPop, CmdRPop:
 		return parsePopCommand(cmdArray)
+	case CmdLLen:
+		return parseLLenCommand(cmdArray)
+	case CmdLRange:
+		return parseLRangeCommand(cmdArray)
 	default:
 		return nil, fmt.Errorf("unknown command: %s", cmdStr.Value)
 	}

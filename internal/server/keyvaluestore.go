@@ -13,7 +13,8 @@ type KVStore interface {
 	Set(key, value []byte, expiresAt int64)                          // Sets a key-value pair with optional expiration time (-1 means no expiration).
 	Push(key []byte, values [][]byte, pushAtFront bool) (int, error) // Pushes values to a list stored at key. If pushAtFront is true, values are added to the front.
 	Pop(key []byte, popAtFront bool) ([]byte, error)                 // Pops a value from a list stored at key. Returns nil if the list is empty or key does not exist.
-	Get(key []byte) ([]byte, bool)                                   // Retrieves the value for a given key.
+	GetValue(key []byte) ([]byte, error)                             // Retrieves the value for a given key.
+	GetList(key []byte) ([][]byte, error)                            // Retrieves the list for a given key.
 	Delete(keys [][]byte) int64                                      // Deletes a key-value pair. Returning the number of keys deleted.
 	Exists(keys [][]byte) int64                                      // Returns the number of keys currently stored.
 	Expire(key []byte, expiresAt int64) bool                         // Sets expiration for a key. Returns true if the key exists and expiration is set.
@@ -43,6 +44,11 @@ func NewListEntry(list [][]byte, expiresAt int64) *Entry {
 	}
 }
 
+// Checks if the current entry is expired.
+func (e *Entry) isExpired() bool {
+	return e.expiresAt > 0 && time.Now().UnixNano() > e.expiresAt
+}
+
 // Implement the KVStore interface with a map.
 type InMemoryKVStore struct {
 	store     map[string]*Entry
@@ -56,6 +62,13 @@ const (
 	cleanupInterval   = time.Millisecond * 250
 	cleanupCountBound = 25
 )
+
+// Removes a key from both the store and expirable maps.
+// Must be called with the lock already held.
+func (kv *InMemoryKVStore) deleteKey(key string) {
+	delete(kv.store, key)
+	delete(kv.expirable, key)
+}
 
 func NewInMemoryKVStore() *InMemoryKVStore {
 	store := &InMemoryKVStore{
@@ -86,7 +99,7 @@ func (kv *InMemoryKVStore) Set(key, value []byte, expiresAt int64) {
 	kv.store[string(key)] = entry
 }
 
-func (kv *InMemoryKVStore) Get(key []byte) ([]byte, bool) {
+func (kv *InMemoryKVStore) get(key []byte) (*Entry, bool) {
 	kv.mu.RLock()
 	if kv.closed {
 		kv.mu.RUnlock()
@@ -100,16 +113,48 @@ func (kv *InMemoryKVStore) Get(key []byte) ([]byte, bool) {
 	}
 
 	// Check expiration
-	if entry.expiresAt > 0 && time.Now().UnixNano() > entry.expiresAt {
+	if entry.isExpired() {
 		// Key has expired
 		kv.mu.Lock()
-		delete(kv.store, string(key))
-		delete(kv.expirable, string(key))
+		kv.deleteKey(string(key))
 		kv.mu.Unlock()
 		return nil, false
 	}
 
-	return entry.value, exists
+	return entry, true
+}
+
+func (kv *InMemoryKVStore) GetValue(key []byte) ([]byte, error) {
+	entry, exists := kv.get(key)
+	if !exists {
+		return nil, nil
+	}
+
+	if entry.isList {
+		return nil, fmt.Errorf("WRONGTYPE Operation against a key holding the wrong kind of value")
+	}
+
+	return entry.value, nil
+}
+
+func (kv *InMemoryKVStore) GetList(key []byte) ([][]byte, error) {
+	kv.mu.RLock()
+	defer kv.mu.RUnlock()
+
+	if kv.closed {
+		return nil, fmt.Errorf("store is closed")
+	}
+
+	entry, exists := kv.get(key)
+	if !exists {
+		return nil, nil
+	}
+
+	if !entry.isList {
+		return nil, fmt.Errorf("WRONGTYPE Operation against a key holding the wrong kind of value")
+	}
+
+	return entry.list, nil
 }
 
 func (kv *InMemoryKVStore) Delete(keys [][]byte) int64 {
@@ -124,8 +169,7 @@ func (kv *InMemoryKVStore) Delete(keys [][]byte) int64 {
 	for _, key := range keys {
 		_, exists := kv.store[string(key)]
 		if exists {
-			delete(kv.store, string(key))
-			delete(kv.expirable, string(key))
+			kv.deleteKey(string(key))
 			deletedKeys++
 		}
 
@@ -146,11 +190,10 @@ func (kv *InMemoryKVStore) Exists(keys [][]byte) int64 {
 
 	var existingKeys int64 = 0
 	for _, key := range keys {
-		_, exists := kv.store[string(key)]
+		entry, exists := kv.store[string(key)]
 		if exists {
 			// Check expiration
-			value := kv.store[string(key)]
-			if value.expiresAt > 0 && time.Now().UnixNano() > value.expiresAt {
+			if entry.isExpired() {
 				// Key has expired, skip counting
 				continue
 			}
@@ -169,22 +212,21 @@ func (kv *InMemoryKVStore) Expire(key []byte, expiresAt int64) bool {
 		return false
 	}
 
-	value, exists := kv.store[string(key)]
+	entry, exists := kv.store[string(key)]
 	if !exists {
 		return false
 	}
 
 	// Check if expired already
-	if value.expiresAt > 0 && time.Now().UnixNano() > value.expiresAt {
+	if entry.isExpired() {
 		// Key has expired
-		delete(kv.store, string(key))
-		delete(kv.expirable, string(key))
+		kv.deleteKey(string(key))
 		return false
 	}
 
 	// Update expiration time
-	value.expiresAt = expiresAt
-	kv.store[string(key)] = value
+	entry.expiresAt = expiresAt
+	kv.store[string(key)] = entry
 
 	return true
 }
@@ -203,10 +245,9 @@ func (kv *InMemoryKVStore) Push(key []byte, values [][]byte, pushAtFront bool) (
 	}
 
 	// Check if expired already
-	if exists && entry.expiresAt > 0 && time.Now().UnixNano() > entry.expiresAt {
+	if exists && entry.isExpired() {
 		// Key has expired
-		delete(kv.store, string(key))
-		delete(kv.expirable, string(key))
+		kv.deleteKey(string(key))
 		exists = false
 	}
 
@@ -248,10 +289,9 @@ func (kv *InMemoryKVStore) Pop(key []byte, popAtFront bool) ([]byte, error) {
 	}
 
 	// Check if expired already
-	if exists && entry.expiresAt > 0 && time.Now().UnixNano() > entry.expiresAt {
+	if exists && entry.isExpired() {
 		// Key has expired
-		delete(kv.store, string(key))
-		delete(kv.expirable, string(key))
+		kv.deleteKey(string(key))
 		return nil, nil
 	}
 
@@ -298,10 +338,9 @@ func (kv *InMemoryKVStore) cleanupExpiredKeys() {
 			// Iterate over expirable keys and remove expired ones
 			for key := range kv.expirable {
 				// If the key exists, check expiration and delete if expired
-				if value, exists := kv.store[key]; exists {
-					if value.expiresAt > 0 && time.Now().UnixNano() > value.expiresAt {
-						delete(kv.store, key)
-						delete(kv.expirable, key)
+				if entry, exists := kv.store[key]; exists {
+					if entry.isExpired() {
+						kv.deleteKey(key)
 					}
 				} else {
 					// Key no longer exists, remove from expirable map

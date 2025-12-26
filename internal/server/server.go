@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/CDavidSV/GopherStore/internal/resp"
+	"github.com/CDavidSV/GopherStore/internal/util"
 )
 
 type Message struct {
@@ -107,14 +108,20 @@ func (s *Server) handlePingCommand(cmd PingCommand, client *Client) {
 
 // Handles a SET command from a client.
 func (s *Server) handleSetCommand(cmd SetCommand, client *Client) {
-	_, ok := s.store.Get(cmd.Key)
-	if cmd.condition == ConditionNX && ok {
+	value, err := s.store.GetValue(cmd.Key)
+	if err != nil {
+		s.logger.Error("failed to handle SET command", "error", err, "remoteAddr", client.conn.RemoteAddr().String())
+		client.SendMessage(resp.EncodeError(err.Error()))
+		return
+	}
+
+	if cmd.condition == ConditionNX && value != nil {
 		// Key exists, do not set
 		client.SendMessage(resp.EncodeBulkString(nil))
 		return
 	}
 
-	if cmd.condition == ConditionXX && !ok {
+	if cmd.condition == ConditionXX && value == nil {
 		// Key does not exist, do not set
 		client.SendMessage(resp.EncodeSimpleString("OK"))
 		return
@@ -139,8 +146,14 @@ func (s *Server) handleSetCommand(cmd SetCommand, client *Client) {
 
 // Handles a GET command from a client.
 func (s *Server) handleGetCommand(cmd GetCommand, client *Client) {
-	value, exists := s.store.Get(cmd.Key)
-	if !exists {
+	value, err := s.store.GetValue(cmd.Key)
+	if err != nil {
+		s.logger.Error("failed to handle GET command", "error", err, "remoteAddr", client.conn.RemoteAddr().String())
+		client.SendMessage(resp.EncodeError(err.Error()))
+		return
+	}
+
+	if value == nil {
 		// Reply with nil bulk string
 		if err := client.SendMessage(resp.EncodeBulkString(nil)); err != nil {
 			s.logger.Error("failed to send GET response", "error", err, "remoteAddr", client.conn.RemoteAddr().String())
@@ -204,6 +217,40 @@ func (s *Server) handlePopCommand(cmd PopCommand, client *Client) {
 	}
 }
 
+func (s *Server) handleLLenCommand(cmd LLenCommand, client *Client) {
+	list, err := s.store.GetList(cmd.Key)
+	if err != nil {
+		s.logger.Error("failed to handle LLEN command", "error", err, "remoteAddr", client.conn.RemoteAddr().String())
+		client.SendMessage(resp.EncodeError(err.Error()))
+		return
+	}
+
+	if list == nil {
+		client.SendMessage(resp.EncodeInteger(0))
+		return
+	}
+
+	client.SendMessage(resp.EncodeInteger(int64(len(list))))
+}
+
+func (s *Server) handleLRangeCommand(cmd LRangeCommand, client *Client) {
+	list, err := s.store.GetList(cmd.Key)
+	if err != nil {
+		s.logger.Error("failed to handle LRANGE command", "error", err, "remoteAddr", client.conn.RemoteAddr().String())
+		client.SendMessage(resp.EncodeError(err.Error()))
+		return
+	}
+
+	if list == nil {
+		client.SendMessage(resp.EncodeBulkStringArray(nil))
+		return
+	}
+
+	// Slice list and send to client
+	slicedList := util.SliceList(list, cmd.Start, cmd.End)
+	client.SendMessage(resp.EncodeBulkStringArray(slicedList))
+}
+
 func (s *Server) handleMessage(msg Message) {
 	switch cmd := msg.cmd.(type) {
 	case PingCommand:
@@ -222,6 +269,10 @@ func (s *Server) handleMessage(msg Message) {
 		s.handlePushCommand(cmd, msg.client)
 	case PopCommand:
 		s.handlePopCommand(cmd, msg.client)
+	case LLenCommand:
+		s.handleLLenCommand(cmd, msg.client)
+	case LRangeCommand:
+		s.handleLRangeCommand(cmd, msg.client)
 	}
 }
 

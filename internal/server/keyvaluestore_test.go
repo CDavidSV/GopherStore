@@ -17,8 +17,11 @@ func TestSetAndGet(t *testing.T) {
 	store.Set(key, value, -1)
 
 	// Get the value back
-	result, exists := store.Get(key)
-	if !exists {
+	result, err := store.GetValue(key)
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+	if result == nil {
 		t.Fatal("Expected key to exist")
 	}
 
@@ -33,9 +36,9 @@ func TestGetNonExistent(t *testing.T) {
 
 	key := []byte("nonexistent")
 
-	result, exists := store.Get(key)
-	if exists {
-		t.Fatal("Expected key to not exist")
+	result, err := store.GetValue(key)
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
 	}
 
 	if result != nil {
@@ -64,13 +67,19 @@ func TestDelete(t *testing.T) {
 	}
 
 	// Verify keys are deleted
-	_, exists := store.Get(key1)
-	if exists {
+	result, err := store.GetValue(key1)
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+	if result != nil {
 		t.Error("Expected key1 to be deleted")
 	}
 
-	_, exists = store.Get(key2)
-	if exists {
+	result, err = store.GetValue(key2)
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+	if result != nil {
 		t.Error("Expected key2 to be deleted")
 	}
 }
@@ -87,8 +96,11 @@ func TestExpiration(t *testing.T) {
 	store.Set(key, value, expiresAt)
 
 	// Should exist immediately
-	result, exists := store.Get(key)
-	if !exists {
+	result, err := store.GetValue(key)
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+	if result == nil {
 		t.Fatal("Expected key to exist")
 	}
 	if string(result) != string(value) {
@@ -99,8 +111,11 @@ func TestExpiration(t *testing.T) {
 	time.Sleep(150 * time.Millisecond)
 
 	// Should not exist after expiration
-	_, exists = store.Get(key)
-	if exists {
+	result, err = store.GetValue(key)
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+	if result != nil {
 		t.Error("Expected key to be expired")
 	}
 }
@@ -144,14 +159,20 @@ func TestUpdateExistingKey(t *testing.T) {
 	value2 := []byte("value2")
 
 	store.Set(key, value1, -1)
-	result, _ := store.Get(key)
+	result, err := store.GetValue(key)
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
 	if string(result) != string(value1) {
 		t.Errorf("Expected %s, got %s", value1, result)
 	}
 
 	// Update the key
 	store.Set(key, value2, -1)
-	result, _ = store.Get(key)
+	result, err = store.GetValue(key)
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
 	if string(result) != string(value2) {
 		t.Errorf("Expected %s, got %s", value2, result)
 	}
@@ -169,9 +190,12 @@ func TestClose(t *testing.T) {
 	// Operations after close should be no-op
 	store.Set([]byte("newkey"), []byte("newvalue"), -1)
 
-	result, exists := store.Get(key)
-	if exists || result != nil {
-		t.Error("Expected Get to return false after Close")
+	result, err := store.GetValue(key)
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+	if result != nil {
+		t.Error("Expected nil result after Close")
 	}
 
 	deletedCount := store.Delete([][]byte{key})
@@ -211,7 +235,7 @@ func TestConcurrentAccess(t *testing.T) {
 			defer wg.Done()
 			for j := 0; j < numOperations; j++ {
 				key := []byte{byte(id), byte(j)}
-				store.Get(key)
+				store.GetValue(key)
 			}
 		}(i)
 	}
@@ -244,8 +268,11 @@ func TestExpirationEdgeCases(t *testing.T) {
 		store.Set(key, value, expiresAt)
 
 		// Should immediately return not found
-		_, exists := store.Get(key)
-		if exists {
+		result, err := store.GetValue(key)
+		if err != nil {
+			t.Fatalf("Unexpected error: %v", err)
+		}
+		if result != nil {
 			t.Error("Expected already-expired key to not exist")
 		}
 	})
@@ -256,8 +283,11 @@ func TestExpirationEdgeCases(t *testing.T) {
 		store.Set(key, value, 0)
 
 		time.Sleep(100 * time.Millisecond)
-		result, exists := store.Get(key)
-		if !exists {
+		result, err := store.GetValue(key)
+		if err != nil {
+			t.Fatalf("Unexpected error: %v", err)
+		}
+		if result == nil {
 			t.Error("Expected key with expiration 0 to exist")
 		}
 		if string(result) != string(value) {
@@ -271,14 +301,40 @@ func TestExpirationEdgeCases(t *testing.T) {
 		store.Set(key, value, -1)
 
 		time.Sleep(100 * time.Millisecond)
-		result, exists := store.Get(key)
-		if !exists {
+		result, err := store.GetValue(key)
+		if err != nil {
+			t.Fatalf("Unexpected error: %v", err)
+		}
+		if result == nil {
 			t.Error("Expected key with expiration -1 to exist")
 		}
 		if string(result) != string(value) {
 			t.Errorf("Expected %s, got %s", value, result)
 		}
 	})
+}
+
+func TestGetWrongType(t *testing.T) {
+	store := NewInMemoryKVStore()
+	defer store.Close()
+
+	key := []byte("list_key")
+	values := [][]byte{[]byte("value1"), []byte("value2")}
+
+	// Create a list
+	store.Push(key, values, false)
+
+	// Try to GetValue a list key
+	result, err := store.GetValue(key)
+	if err == nil {
+		t.Error("Expected error when getting a list key")
+	}
+	if err.Error() != "WRONGTYPE Operation against a key holding the wrong kind of value" {
+		t.Errorf("Expected WRONGTYPE error, got %v", err)
+	}
+	if result != nil {
+		t.Errorf("Expected nil result, got %v", result)
+	}
 }
 
 func TestEmptyKeys(t *testing.T) {
@@ -289,8 +345,11 @@ func TestEmptyKeys(t *testing.T) {
 	value := []byte("value")
 
 	store.Set(emptyKey, value, -1)
-	result, exists := store.Get(emptyKey)
-	if !exists {
+	result, err := store.GetValue(emptyKey)
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+	if result == nil {
 		t.Error("Expected empty key to be stored")
 	}
 	if string(result) != string(value) {
@@ -336,14 +395,20 @@ func TestDeleteMultiple(t *testing.T) {
 	}
 
 	// Verify deleted keys don't exist
-	_, exists := store.Get([]byte("key1"))
-	if exists {
+	result, err := store.GetValue([]byte("key1"))
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+	if result != nil {
 		t.Error("Expected key1 to be deleted")
 	}
 
 	// Verify non-deleted keys still exist
-	_, exists = store.Get([]byte("key2"))
-	if !exists {
+	result, err = store.GetValue([]byte("key2"))
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+	if result == nil {
 		t.Error("Expected key2 to still exist")
 	}
 }
@@ -549,7 +614,7 @@ func BenchmarkGet(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		store.Get(key)
+		store.GetValue(key)
 	}
 }
 
@@ -580,7 +645,7 @@ func BenchmarkConcurrentReadWrite(b *testing.B) {
 			if i%2 == 0 {
 				store.Set(key, value, -1)
 			} else {
-				store.Get(key)
+				store.GetValue(key)
 			}
 			i++
 		}
