@@ -41,6 +41,11 @@ func ReadArray(r *bufio.Reader) (RespArray, error) {
 		return RespArray{}, err
 	}
 
+	// Handle null array case.
+	if count == -1 {
+		return RespArray{Elements: nil}, nil
+	}
+
 	// Once we have the actual cound, we read each element and recursively call ReadRESP to append to the array.
 	elements := make([]RespValue, 0, count)
 	for range count {
