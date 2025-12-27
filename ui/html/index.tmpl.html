@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GopherStore - Redis Clone</title>
+    <link rel="stylesheet" href="/static/css/main.css">
+</head>
+
+<body>
+    <div class="container">
+        <header>
+            <img src="/static/img/Gopher.png" alt="Go Gopher" class="logo">
+            <h1>GopherStore</h1>
+        </header>
+
+        <div class="commands-grid">
+            <!-- SET Command -->
+            <div class="command-card">
+                <h2>SET</h2>
+                <p>Set a key-value pair with optional expiration and conditions</p>
+                <form id="setForm">
+                    <div class="form-group">
+                        <label for="setKey">Key:</label>
+                        <input type="text" id="setKey" name="key" placeholder="mykey" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="setValue">Value:</label>
+                        <input type="text" id="setValue" name="value" placeholder="myvalue" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="setExpiration">Expiration (seconds, optional):</label>
+                        <input type="number" id="setExpiration" name="expiration" placeholder="60" min="0">
+                    </div>
+                    <div class="form-group">
+                        <label for="setCondition">Condition:</label>
+                        <select id="setCondition" name="condition">
+                            <option value="">None</option>
+                            <option value="NX">NX (Set if not exists)</option>
+                            <option value="XX">XX (Set if exists)</option>
+                        </select>
+                    </div>
+                    <button type="submit">Set Value</button>
+                </form>
+            </div>
+
+            <!-- GET Command -->
+            <div class="command-card">
+                <h2>GET</h2>
+                <p>Retrieve the value of a key</p>
+                <form id="getForm">
+                    <div class="form-group">
+                        <label for="getKey">Key:</label>
+                        <input type="text" id="getKey" name="key" placeholder="mykey" required>
+                    </div>
+                    <button type="submit">Get Value</button>
+                </form>
+            </div>
+
+            <!-- DELETE Command -->
+            <div class="command-card">
+                <h2>DELETE (DEL)</h2>
+                <p>Delete one or more keys</p>
+                <form id="deleteForm">
+                    <div class="form-group">
+                        <label for="deleteKeys">Keys (comma-separated):</label>
+                        <input type="text" id="deleteKeys" name="keys" placeholder="key1, key2, key3" required>
+                    </div>
+                    <button type="submit">Delete Keys</button>
+                </form>
+            </div>
+
+            <!-- LPUSH Command -->
+            <div class="command-card">
+                <h2>LPUSH</h2>
+                <p>Push values to the front of a list</p>
+                <form id="lpushForm">
+                    <div class="form-group">
+                        <label for="lpushKey">Key:</label>
+                        <input type="text" id="lpushKey" name="key" placeholder="mylist" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="lpushValues">Values (comma-separated):</label>
+                        <textarea id="lpushValues" name="values" placeholder="value1, value2, value3"
+                            required></textarea>
+                    </div>
+                    <button type="submit">Push to Front</button>
+                </form>
+            </div>
+
+            <!-- RPUSH Command -->
+            <div class="command-card">
+                <h2>RPUSH</h2>
+                <p>Push values to the back of a list</p>
+                <form id="rpushForm">
+                    <div class="form-group">
+                        <label for="rpushKey">Key:</label>
+                        <input type="text" id="rpushKey" name="key" placeholder="mylist" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="rpushValues">Values (comma-separated):</label>
+                        <textarea id="rpushValues" name="values" placeholder="value1, value2, value3"
+                            required></textarea>
+                    </div>
+                    <button type="submit">Push to Back</button>
+                </form>
+            </div>
+
+            <!-- LPOP Command -->
+            <div class="command-card">
+                <h2>LPOP</h2>
+                <p>Pop a value from the front of a list</p>
+                <form id="lpopForm">
+                    <div class="form-group">
+                        <label for="lpopKey">Key:</label>
+                        <input type="text" id="lpopKey" name="key" placeholder="mylist" required>
+                    </div>
+                    <button type="submit">Pop from Front</button>
+                </form>
+            </div>
+
+            <!-- RPOP Command -->
+            <div class="command-card">
+                <h2>RPOP</h2>
+                <p>Pop a value from the back of a list</p>
+                <form id="rpopForm">
+                    <div class="form-group">
+                        <label for="rpopKey">Key:</label>
+                        <input type="text" id="rpopKey" name="key" placeholder="mylist" required>
+                    </div>
+                    <button type="submit">Pop from Back</button>
+                </form>
+            </div>
+
+            <!-- LLEN Command -->
+            <div class="command-card">
+                <h2>LLEN</h2>
+                <p>Get the length of a list</p>
+                <form id="llenForm">
+                    <div class="form-group">
+                        <label for="llenKey">Key:</label>
+                        <input type="text" id="llenKey" name="key" placeholder="mylist" required>
+                    </div>
+                    <button type="submit">Get Length</button>
+                </form>
+            </div>
+
+            <!-- LRANGE Command -->
+            <div class="command-card">
+                <h2>LRANGE</h2>
+                <p>Get a range of elements from a list</p>
+                <form id="lrangeForm">
+                    <div class="form-group">
+                        <label for="lrangeKey">Key:</label>
+                        <input type="text" id="lrangeKey" name="key" placeholder="mylist" required>
+                    </div>
+                    <div class="inline-inputs">
+                        <div class="form-group">
+                            <label for="lrangeStart">Start Index:</label>
+                            <input type="number" id="lrangeStart" name="start" placeholder="0" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="lrangeEnd">End Index:</label>
+                            <input type="number" id="lrangeEnd" name="end" placeholder="-1" required>
+                        </div>
+                    </div>
+                    <p class="small-text">Use -1 for end to get all elements from start</p>
+                    <button type="submit">Get Range</button>
+                </form>
+            </div>
+
+            <!-- EXPIRE Command -->
+            <div class="command-card">
+                <h2>EXPIRE</h2>
+                <p>Set a timeout on a key</p>
+                <form id="expireForm">
+                    <div class="form-group">
+                        <label for="expireKey">Key:</label>
+                        <input type="text" id="expireKey" name="key" placeholder="mykey" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="expireSeconds">Expiration (seconds):</label>
+                        <input type="number" id="expireSeconds" name="expire_seconds" placeholder="60" min="1" required>
+                    </div>
+                    <button type="submit">Set Expiration</button>
+                </form>
+            </div>
+        </div>
+
+        <div class="response-area">
+            <h2>Response</h2>
+            <div id="response">Waiting for command execution...</div>
+        </div>
+    </div>
+
+    <script src="/static/js/main.js"></script>
+</body>
+
+</html>
