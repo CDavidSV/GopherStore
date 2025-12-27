@@ -1,6 +1,9 @@
 const responseDiv = document.getElementById("response");
 
 function displayResponse(data, isError = false) {
+    // Scroll to the bottom of the page
+    window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" });
+
     responseDiv.className = isError ? "error" : "success";
     if (typeof data === "object") {
         responseDiv.innerHTML = `<pre>${JSON.stringify(data, null, 4)}</pre>`;
