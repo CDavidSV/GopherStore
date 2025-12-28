@@ -1,0 +1,21 @@
+services:
+  web:
+    build:
+      context: .
+      dockerfile: ./web.dockerfile
+    ports:
+      - "3000:3000"
+    depends_on:
+      - server
+    networks:
+      - cache_net
+  server:
+    build:
+      context: .
+      dockerfile: ./gopherstore.dockerfile
+    networks:
+      - cache_net
+
+networks:
+  cache_net:
+    driver: bridge

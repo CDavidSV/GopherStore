@@ -394,7 +394,7 @@ func handleExpiresCommand(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
-	addr := flag.String("addr", "localhost:8080", "HTTP network address")
+	addr := flag.String("addr", "localhost:3000", "HTTP network address")
 	cacheAddr := flag.String("cache-addr", "localhost:5001", "Cache server network address")
 	flag.Parse()
 

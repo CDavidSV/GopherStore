@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"log/slog"
 	"os"
 
@@ -8,10 +9,13 @@ import (
 )
 
 func main() {
+	addr := flag.String("addr", "0.0.0.0:5001", "Server network address")
+	flag.Parse()
+
 	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug}))
 
 	storage := server.NewInMemoryKVStore()
-	server := server.NewServer(logger, ":5001", storage)
+	server := server.NewServer(logger, *addr, storage)
 
 	// Start server
 	err := server.Start()
