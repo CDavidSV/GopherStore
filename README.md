@@ -282,4 +282,4 @@ The web client accepts:
 
 ## License
 
-This project is open source and available under the MIT License.s
+This project is open source and available under the MIT License.
