@@ -124,15 +124,23 @@ func handleSetCommand(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	stringRes, ok := cashRes.(resp.RespSimpleString)
-	if !ok {
+	switch stringRes := cashRes.(type) {
+	case resp.RespSimpleString:
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(Response{Data: stringRes.Value})
+	case resp.RespBulkString:
+		if stringRes.Value == nil {
+			http.Error(w, "Key not set due to condition", http.StatusPreconditionFailed)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(Response{Data: stringRes.Value})
+	default:
 		http.Error(w, "Invalid response format", http.StatusInternalServerError)
 		return
 	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(Response{Data: stringRes.Value})
 }
 
 func handleGetCommand(w http.ResponseWriter, r *http.Request) {

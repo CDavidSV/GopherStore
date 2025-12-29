@@ -123,7 +123,7 @@ func (s *Server) handleSetCommand(cmd SetCommand, client *Client) {
 
 	if cmd.condition == ConditionXX && value == nil {
 		// Key does not exist, do not set
-		client.SendMessage(resp.EncodeSimpleString("OK"))
+		client.SendMessage(resp.EncodeBulkString(nil))
 		return
 	}
 
