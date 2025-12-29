@@ -138,13 +138,6 @@ func (kv *InMemoryKVStore) GetValue(key []byte) ([]byte, error) {
 }
 
 func (kv *InMemoryKVStore) GetList(key []byte) ([][]byte, error) {
-	kv.mu.RLock()
-	defer kv.mu.RUnlock()
-
-	if kv.closed {
-		return nil, fmt.Errorf("store is closed")
-	}
-
 	entry, exists := kv.get(key)
 	if !exists {
 		return nil, nil
