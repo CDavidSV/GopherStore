@@ -4,14 +4,18 @@ import (
 	"bufio"
 	"encoding/json"
 	"flag"
+	"fmt"
 	"html/template"
 	"log"
 	"log/slog"
 	"net"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/CDavidSV/GopherStore/internal/resp"
+	"github.com/charmbracelet/lipgloss"
+	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-playground/validator/v10"
 )
 
@@ -393,6 +397,84 @@ func handleExpiresCommand(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(Response{Data: intRes.Value})
 }
 
+func recoverPanic(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer func() {
+			if err := recover(); err != nil {
+				w.Header().Set("Connection", "close")
+
+				http.Error(w, fmt.Sprintf("Internal Server Error: %v", err), http.StatusInternalServerError)
+			}
+		}()
+
+		next.ServeHTTP(w, r)
+	})
+}
+
+var methodColors map[string]string = map[string]string{
+	"GET":     "#388de3ff",
+	"POST":    "#1bb16dff",
+	"PUT":     "#dc851aff",
+	"PATCH":   "#00bb92ff",
+	"DELETE":  "#F93E3E",
+	"HEAD":    "#9012FE",
+	"OPTIONS": "#0D5AA7",
+}
+
+func styleStatusCode(code int) string {
+	style := lipgloss.NewStyle().Bold(true)
+	codeStr := strconv.Itoa(code)
+
+	if code >= 100 && code <= 199 {
+		return style.Background(lipgloss.Color("#0D5AA7")).Render("", codeStr, "")
+	}
+
+	if code >= 200 && code <= 299 {
+		return style.Background(lipgloss.Color("#31a872ff")).Render("", codeStr, "")
+	}
+
+	if code >= 300 && code <= 399 {
+		return style.Background(lipgloss.Color("#ff8c00ff")).Render("", codeStr, "")
+	}
+
+	if code >= 400 && code <= 599 {
+		return style.Background(lipgloss.Color("#F93E3E")).Render("", codeStr, "")
+	}
+
+	return style.Render("", codeStr, "")
+}
+
+func styleMethod(method string) string {
+	color, ok := methodColors[method]
+	if !ok {
+		return method
+	}
+
+	style := lipgloss.NewStyle().Background(lipgloss.Color(color)).Bold(true)
+	return style.Render(fmt.Sprintf(" %-8s ", method))
+}
+
+func Logger(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
+		ww := middleware.NewWrapResponseWriter(res, req.ProtoMajor)
+
+		ip := req.RemoteAddr
+		if ip == "" {
+			ip = req.Header.Get("X-Forwarded-For")
+		}
+		path := req.URL.Path
+		method := styleMethod(req.Method)
+		now := time.Now()
+
+		next.ServeHTTP(ww, req)
+
+		took := time.Since(now).String()
+		status := styleStatusCode(ww.Status())
+
+		fmt.Printf("%s |%s| %13s | %15s |%s %s\n", now.Format("2006/01/02 - 15:04:05"), status, took, ip, method, path)
+	})
+}
+
 func main() {
 	addr := flag.String("addr", "localhost:3000", "HTTP network address")
 	cacheAddr := flag.String("cache-addr", "localhost:5001", "Cache server network address")
@@ -418,5 +500,5 @@ func main() {
 	mux.HandleFunc("POST /expires", handleExpiresCommand)
 
 	slog.Info("Starting server", "addr", *addr)
-	log.Fatal(http.ListenAndServe(*addr, mux))
+	log.Fatal(http.ListenAndServe(*addr, recoverPanic(Logger(mux))))
 }
