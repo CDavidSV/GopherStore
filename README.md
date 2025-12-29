@@ -2,6 +2,8 @@
 
 A lightweight Redis clone written in Go, with support for strings and lists.
 
+Try it: https://gopherstore.cdavidsv.dev/
+
 ## Features
 
 ### Data Structures
