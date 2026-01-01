@@ -1,18 +1,17 @@
-const responseDiv = document.getElementById("response");
+function formatResponse(data, isError = false) {
+    const className = isError ? "error" : "success";
+    let content;
 
-function displayResponse(data, isError = false) {
-    // Scroll to the bottom of the page
-    window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" });
-
-    responseDiv.className = isError ? "error" : "success";
     if (typeof data === "object") {
-        responseDiv.innerHTML = `<pre>${JSON.stringify(data, null, 4)}</pre>`;
+        content = `<pre>${JSON.stringify(data, null, 4)}</pre>`;
     } else {
-        responseDiv.textContent = data;
+        content = data;
     }
+
+    return { className, content };
 }
 
-async function sendRequest(url, method, body = null) {
+async function sendRequest(url, method, responseElementId, body = null) {
     try {
         const options = {
             method: method,
@@ -25,17 +24,38 @@ async function sendRequest(url, method, body = null) {
             options.body = JSON.stringify(body);
         }
 
+        console.log("Sending request:", { url, method, body: options.body });
+
         const response = await fetch(url, options);
-        const data = await (response.headers.get("Content-Type")?.includes("application/json") ? response.json() : response.text());
+        const data = await (response.headers
+            .get("Content-Type")
+            ?.includes("application/json")
+            ? response.json()
+            : response.text());
+
+        const responseElement = document.getElementById(responseElementId);
+        if (!responseElement) return;
 
         if (!response.ok) {
-            displayResponse(data || "An error occurred", true);
+            const { className, content } = formatResponse(
+                data || "An error occurred",
+                true
+            );
+            responseElement.className = `command-response ${className}`;
+            responseElement.innerHTML = content;
         } else {
-            displayResponse(data);
+            const { className, content } = formatResponse(data);
+            responseElement.className = `command-response ${className}`;
+            responseElement.innerHTML = content;
         }
     } catch (error) {
         console.log(error);
-        displayResponse(error.message, true);
+        const responseElement = document.getElementById(responseElementId);
+        if (responseElement) {
+            const { className, content } = formatResponse(error.message, true);
+            responseElement.className = `command-response ${className}`;
+            responseElement.innerHTML = content;
+        }
     }
 }
 
@@ -53,14 +73,18 @@ document.getElementById("setForm").addEventListener("submit", async (e) => {
     if (expiration) body.expiration = parseInt(expiration);
     if (condition) body.condition = condition;
 
-    await sendRequest("/set", "POST", body);
+    await sendRequest("/set", "POST", "setResponse", body);
 });
 
 // GET Command
 document.getElementById("getForm").addEventListener("submit", async (e) => {
     e.preventDefault();
     const key = document.getElementById("getKey").value;
-    await sendRequest(`/get?key=${encodeURIComponent(key)}`, "GET");
+    await sendRequest(
+        `/get?key=${encodeURIComponent(key)}`,
+        "GET",
+        "getResponse"
+    );
 });
 
 // DELETE Command
@@ -71,7 +95,7 @@ document.getElementById("deleteForm").addEventListener("submit", async (e) => {
         .value.split(",")
         .map((k) => k.trim())
         .filter((k) => k);
-    await sendRequest("/delete", "POST", { keys });
+    await sendRequest("/delete", "POST", "deleteResponse", { keys });
 });
 
 // LPUSH Command
@@ -83,7 +107,11 @@ document.getElementById("lpushForm").addEventListener("submit", async (e) => {
         .value.split(",")
         .map((v) => v.trim())
         .filter((v) => v);
-    await sendRequest("/push", "POST", { key, values, direction: "left" });
+    await sendRequest("/push", "POST", "lpushResponse", {
+        key,
+        values,
+        direction: "left",
+    });
 });
 
 // RPUSH Command
@@ -95,28 +123,42 @@ document.getElementById("rpushForm").addEventListener("submit", async (e) => {
         .value.split(",")
         .map((v) => v.trim())
         .filter((v) => v);
-    await sendRequest("/push", "POST", { key, values, direction: "right" });
+    await sendRequest("/push", "POST", "rpushResponse", {
+        key,
+        values,
+        direction: "right",
+    });
 });
 
 // LPOP Command
 document.getElementById("lpopForm").addEventListener("submit", async (e) => {
     e.preventDefault();
     const key = document.getElementById("lpopKey").value;
-    await sendRequest("/pop", "POST", { key, direction: "left" });
+    await sendRequest("/pop", "POST", "lpopResponse", {
+        key,
+        direction: "left",
+    });
 });
 
 // RPOP Command
 document.getElementById("rpopForm").addEventListener("submit", async (e) => {
     e.preventDefault();
     const key = document.getElementById("rpopKey").value;
-    await sendRequest("/pop", "POST", { key, direction: "right" });
+    await sendRequest("/pop", "POST", "rpopResponse", {
+        key,
+        direction: "right",
+    });
 });
 
 // LLEN Command
 document.getElementById("llenForm").addEventListener("submit", async (e) => {
     e.preventDefault();
     const key = document.getElementById("llenKey").value;
-    await sendRequest(`/llen?key=${encodeURIComponent(key)}`, "GET");
+    await sendRequest(
+        `/llen?key=${encodeURIComponent(key)}`,
+        "GET",
+        "llenResponse"
+    );
 });
 
 // LRANGE Command
@@ -127,7 +169,8 @@ document.getElementById("lrangeForm").addEventListener("submit", async (e) => {
     const end = document.getElementById("lrangeEnd").value;
     await sendRequest(
         `/lrange?key=${encodeURIComponent(key)}&start=${start}&end=${end}`,
-        "GET"
+        "GET",
+        "lrangeResponse"
     );
 });
 
@@ -136,8 +179,9 @@ document.getElementById("expireForm").addEventListener("submit", async (e) => {
     e.preventDefault();
     const key = document.getElementById("expireKey").value;
     const expireSeconds = document.getElementById("expireSeconds").value;
-    await sendRequest("/expires", "POST", {
-        key,
-        expiration: parseInt(expireSeconds)
+
+    await sendRequest("/expires", "POST", "expireResponse", {
+        key: key,
+        expiration: parseInt(expireSeconds),
     });
 });

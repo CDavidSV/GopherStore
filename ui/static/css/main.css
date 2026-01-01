@@ -42,7 +42,7 @@ header .logo {
 
 header h1 {
     font-size: 1.5em;
-    color: #00ADD8;
+    color: #00add8;
     text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
 }
 
@@ -55,10 +55,12 @@ header p {
 footer .content {
     display: flex;
     justify-content: space-between;
+    flex-wrap: wrap;
     color: white;
     padding: 20px 0px;
     margin-top: 20px;
     border-top: 1px solid #333333;
+    gap: 1rem;
 }
 
 footer a {
@@ -99,7 +101,7 @@ footer a {
 }
 
 .command-card h2 {
-    color: #00ADD8;
+    color: #00add8;
     margin-bottom: 15px;
     font-size: 1.5em;
 }
@@ -139,7 +141,7 @@ footer a {
 .form-group textarea:focus,
 .form-group select:focus {
     outline: none;
-    border-color: #00ADD8;
+    border-color: #00add8;
 }
 
 .form-group textarea {
@@ -158,7 +160,7 @@ footer a {
 }
 
 button {
-    background: #00ADD8;
+    background: #00add8;
     color: white;
     border: none;
     padding: 12px 24px;
@@ -173,27 +175,22 @@ button {
 button:hover {
     transform: translateY(-2px);
     box-shadow: 0 5px 15px rgba(0, 173, 216, 0.5);
-    background: #00C9F2;
+    background: #00c9f2;
 }
 
 button:active {
     transform: translateY(0);
 }
 
-.response-area {
-    background: #2d2d2d;
-    border-radius: 12px;
-    padding: 25px;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+.command-card h3 {
+    color: #cccccc;
+    margin-top: 15px;
+    margin-bottom: 8px;
+    font-size: 1em;
+    font-weight: 600;
 }
 
-.response-area h2 {
-    color: #00ADD8;
-    margin-bottom: 15px;
-    font-size: 1.5em;
-}
-
-#response {
+.command-response {
     background: #1a1a1a;
     border: 2px solid #404040;
     border-radius: 6px;
@@ -207,11 +204,11 @@ button:active {
     color: #ffffff;
 }
 
-.success {
-    color: #00ADD8;
+.command-response.success {
+    color: #00add8;
 }
 
-.error {
+.command-response.error {
     color: #ff6b6b;
 }
 

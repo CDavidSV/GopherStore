@@ -5,6 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>GopherStore - Redis Clone</title>
+    <meta name="description" content="GopherStore is a simple in-memory key-value store inspired by Redis, and built with Go.">
     <link rel="stylesheet" href="/static/css/main.css">
 </head>
 
@@ -20,6 +21,7 @@
                     <img src="https://cdn.cdavidsv.dev/img/github.svg" alt="GitHub">
                 </a>
             </div>
+            <p>An in-memory key-value store inspired by Redis, built with Go.</p>
         </header>
 
         <div class="commands-grid">
@@ -50,6 +52,8 @@
                     </div>
                     <button type="submit">Set Value</button>
                 </form>
+                <h3>Response</h3>
+                <div class="command-response" id="setResponse">Waiting for command execution...</div>
             </div>
 
             <!-- GET Command -->
@@ -63,6 +67,8 @@
                     </div>
                     <button type="submit">Get Value</button>
                 </form>
+                <h3>Response</h3>
+                <div class="command-response" id="getResponse">Waiting for command execution...</div>
             </div>
 
             <!-- DELETE Command -->
@@ -76,6 +82,8 @@
                     </div>
                     <button type="submit">Delete Keys</button>
                 </form>
+                <h3>Response</h3>
+                <div class="command-response" id="deleteResponse">Waiting for command execution...</div>
             </div>
 
             <!-- LPUSH Command -->
@@ -94,6 +102,8 @@
                     </div>
                     <button type="submit">Push to Front</button>
                 </form>
+                <h3>Response</h3>
+                <div class="command-response" id="lpushResponse">Waiting for command execution...</div>
             </div>
 
             <!-- RPUSH Command -->
@@ -112,6 +122,8 @@
                     </div>
                     <button type="submit">Push to Back</button>
                 </form>
+                <h3>Response</h3>
+                <div class="command-response" id="rpushResponse">Waiting for command execution...</div>
             </div>
 
             <!-- LPOP Command -->
@@ -125,6 +137,8 @@
                     </div>
                     <button type="submit">Pop from Front</button>
                 </form>
+                <h3>Response</h3>
+                <div class="command-response" id="lpopResponse">Waiting for command execution...</div>
             </div>
 
             <!-- RPOP Command -->
@@ -138,6 +152,8 @@
                     </div>
                     <button type="submit">Pop from Back</button>
                 </form>
+                <h3>Response</h3>
+                <div class="command-response" id="rpopResponse">Waiting for command execution...</div>
             </div>
 
             <!-- LLEN Command -->
@@ -151,6 +167,8 @@
                     </div>
                     <button type="submit">Get Length</button>
                 </form>
+                <h3>Response</h3>
+                <div class="command-response" id="llenResponse">Waiting for command execution...</div>
             </div>
 
             <!-- LRANGE Command -->
@@ -175,6 +193,8 @@
                     <p class="small-text">Use -1 for end to get all elements from start</p>
                     <button type="submit">Get Range</button>
                 </form>
+                <h3>Response</h3>
+                <div class="command-response" id="lrangeResponse">Waiting for command execution...</div>
             </div>
 
             <!-- EXPIRE Command -->
@@ -192,12 +212,9 @@
                     </div>
                     <button type="submit">Set Expiration</button>
                 </form>
+                <h3>Response</h3>
+                <div class="command-response" id="expireResponse">Waiting for command execution...</div>
             </div>
-        </div>
-
-        <div class="response-area">
-            <h2>Response</h2>
-            <div id="response">Waiting for command execution...</div>
         </div>
 
         <footer>
