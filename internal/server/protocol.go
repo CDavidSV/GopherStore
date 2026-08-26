@@ -26,8 +26,10 @@ const (
 	CmdDelete  CommandName = "DEL"
 	CmdExpire  CommandName = "EXPIRE"
 	CmdPExpire CommandName = "PEXPIRE"
+)
 
-	// SET command conditions
+// SET command conditions.
+const (
 	ConditionNone SetCondition = iota
 	ConditionNX                // Only set if key does not exist
 	ConditionXX                // Only set if key exists
@@ -356,6 +358,10 @@ func parseLRangeCommand(arr resp.RespArray) (Command, error) {
 }
 
 func ParseCommand(cmdArray resp.RespArray) (Command, error) {
+	if len(cmdArray.Elements) == 0 {
+		return nil, fmt.Errorf("empty command array")
+	}
+
 	command := cmdArray.Elements[0]
 
 	cmdStr, ok := command.(resp.RespBulkString)
